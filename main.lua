@@ -198,8 +198,10 @@ makeToggle("Farm Selected Bosses", farmTab, "Boss", function(v)
 end)
 
 ------------------------------------------------
--- 2. HATCH TAB (WITH AUTO SELL TURBO)
 ------------------------------------------------
+-- 2. HATCH TAB (WITH AUTO SELL & DELETE UI)
+------------------------------------------------
+-- 1. Fast Hatch เดิม
 makeToggle("Fast Hatch (NO WAIT)", hatchTab, "Hatch", function(v)
     while _G.Config.Toggles["Hatch"] do
         RS.Remotes.Events.HatchEggEvent:FireServer()
@@ -209,6 +211,7 @@ makeToggle("Fast Hatch (NO WAIT)", hatchTab, "Hatch", function(v)
     end
 end)
 
+-- 2. Fast Auto Feed เดิม
 makeToggle("Fast Auto Feed (NO WAIT)", hatchTab, "Feed", function(v)
     while _G.Config.Toggles["Feed"] do
         pcall(function()
@@ -220,6 +223,40 @@ makeToggle("Fast Auto Feed (NO WAIT)", hatchTab, "Feed", function(v)
     end
 end)
 
+-- [เพิ่มใหม่] 3. Delete Egg UI (ลบหน้าต่างสุ่มไข่ทิ้งถาวร)
+makeToggle("Delete Egg UI (Anti-Lag)", hatchTab, "DeleteEggUI", function(v)
+    local targets = {
+        ["EggOpening"] = true,
+        ["EggOpenGui"] = true,
+        ["HatchGui"] = true
+    }
+
+    local function removeEggUI(obj)
+        if _G.Config.Toggles["DeleteEggUI"] and targets[obj.Name] then
+            pcall(function()
+                obj:Destroy()
+                print("GeminiHub: Destroyed " .. obj.Name)
+            end)
+        end
+    end
+
+    -- ตรวจสอบของเก่า
+    for _, obj in pairs(player.PlayerGui:GetDescendants()) do
+        removeEggUI(obj)
+    end
+
+    -- ดักจับของใหม่
+    local connection
+    connection = player.PlayerGui.DescendantAdded:Connect(function(obj)
+        if not _G.Config.Toggles["DeleteEggUI"] then 
+            connection:Disconnect() -- เลิกดักถ้าปิด Toggle
+            return 
+        end
+        removeEggUI(obj)
+    end)
+end)
+
+-- ส่วน Auto Sell และช่องพิมพ์ชื่อ (เหมือนเดิม)
 local line = Instance.new("Frame", hatchTab)
 line.Size = UDim2.new(1, 0, 0, 2)
 line.BackgroundColor3 = theme.Accent
@@ -255,6 +292,7 @@ makeToggle("Auto Sell (Turbo)", hatchTab, "AutoSell", function(v)
         task.wait(0.3)
     end
 end)
+
 
 ------------------------------------------------
 -- 3. SACRIFICE TAB
