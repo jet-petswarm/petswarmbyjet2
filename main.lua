@@ -6,7 +6,8 @@ local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
-local fileName = "Gemini_PetSwarm.json"
+-- [แก้ไขแล้ว] ชื่อไฟล์จะเปลี่ยนไปตาม ID ของผู้เล่นแต่ละคน ทำให้ฟาร์ม 2 จอแล้วเซฟไม่ทับกัน
+local fileName = "Gemini_" .. player.UserId .. ".json"
 
 ------------------------------------------------
 -- CONFIG & AUTO-RUN SYSTEM
@@ -125,28 +126,22 @@ zoneInput.Size = UDim2.new(1, 0, 0, 35); zoneInput.PlaceholderText = "Zone Name.
 zoneInput.BackgroundColor3 = theme.Button; zoneInput.TextColor3 = theme.Text; Instance.new("UICorner", zoneInput)
 zoneInput.FocusLost:Connect(function() _G.Config.Zone = zoneInput.Text end)
 
--- [UPDATED] ฟังก์ชัน Farm Food แบบ Synchronized Blast (เกาะกลุ่ม)
 makeToggle("Auto Farm Food", farmTab, "Food", function(v)
     while _G.Config.Toggles["Food"] do
         pcall(function()
             local zonePath = workspace.Zones[_G.Config.Zone].FoodSpawns
             local foods = zonePath:GetChildren()
-            
             if #foods > 0 then
-                -- เลือกเป้าหมายเดียวเพื่อให้สัตว์ทุกตัวรุมที่เดียว (Sync)
                 local sharedTarget = foods[math.random(1, #foods)]
                 local allPets = workspace[player.Name].Pets:GetChildren()
-                
                 if sharedTarget and #allPets > 0 then
-                    -- ส่งคำสั่งให้สัตว์ทุกตัวรุมเป้าหมายเดียวกันรัวๆ
                     for _, pet in ipairs(allPets) do
                         task.spawn(function()
-                            for i = 1, 15 do -- Burst 15 รอบเพื่อบดขยี้
+                            for i = 1, 15 do
                                 RS.Remotes.Functions.CollectionRF:InvokeServer("CollectFood", sharedTarget, pet)
                             end
                         end)
                     end
-                    -- รอจังหวะให้ Server ประมวลผลเสร็จ สัตว์จะได้ไม่เดินแตกแถว
                     task.wait(0.3)
                 end
             end
@@ -198,10 +193,8 @@ makeToggle("Farm Selected Bosses", farmTab, "Boss", function(v)
 end)
 
 ------------------------------------------------
+-- 2. HATCH TAB
 ------------------------------------------------
--- 2. HATCH TAB (WITH AUTO SELL & DELETE UI)
-------------------------------------------------
--- 1. Fast Hatch เดิม
 makeToggle("Fast Hatch (NO WAIT)", hatchTab, "Hatch", function(v)
     while _G.Config.Toggles["Hatch"] do
         RS.Remotes.Events.HatchEggEvent:FireServer()
@@ -211,7 +204,6 @@ makeToggle("Fast Hatch (NO WAIT)", hatchTab, "Hatch", function(v)
     end
 end)
 
--- 2. Fast Auto Feed เดิม
 makeToggle("Fast Auto Feed (NO WAIT)", hatchTab, "Feed", function(v)
     while _G.Config.Toggles["Feed"] do
         pcall(function()
@@ -223,56 +215,23 @@ makeToggle("Fast Auto Feed (NO WAIT)", hatchTab, "Feed", function(v)
     end
 end)
 
--- [เพิ่มใหม่] 3. Delete Egg UI (ลบหน้าต่างสุ่มไข่ทิ้งถาวร)
 makeToggle("Delete Egg UI (Anti-Lag)", hatchTab, "DeleteEggUI", function(v)
-    local targets = {
-        ["EggOpening"] = true,
-        ["EggOpenGui"] = true,
-        ["HatchGui"] = true
-    }
-
+    local targets = {["EggOpening"] = true, ["EggOpenGui"] = true, ["HatchGui"] = true}
     local function removeEggUI(obj)
         if _G.Config.Toggles["DeleteEggUI"] and targets[obj.Name] then
-            pcall(function()
-                obj:Destroy()
-                print("GeminiHub: Destroyed " .. obj.Name)
-            end)
+            pcall(function() obj:Destroy() end)
         end
     end
-
-    -- ตรวจสอบของเก่า
-    for _, obj in pairs(player.PlayerGui:GetDescendants()) do
-        removeEggUI(obj)
-    end
-
-    -- ดักจับของใหม่
-    local connection
-    connection = player.PlayerGui.DescendantAdded:Connect(function(obj)
-        if not _G.Config.Toggles["DeleteEggUI"] then 
-            connection:Disconnect() -- เลิกดักถ้าปิด Toggle
-            return 
-        end
-        removeEggUI(obj)
-    end)
+    for _, obj in pairs(player.PlayerGui:GetDescendants()) do removeEggUI(obj) end
+    player.PlayerGui.DescendantAdded:Connect(removeEggUI)
 end)
 
--- ส่วน Auto Sell และช่องพิมพ์ชื่อ (เหมือนเดิม)
 local line = Instance.new("Frame", hatchTab)
-line.Size = UDim2.new(1, 0, 0, 2)
-line.BackgroundColor3 = theme.Accent
-line.BorderSizePixel = 0
+line.Size = UDim2.new(1, 0, 0, 2); line.BackgroundColor3 = theme.Accent; line.BorderSizePixel = 0
 
 local sellInput = Instance.new("TextBox", hatchTab)
-sellInput.Size = UDim2.new(1, 0, 0, 35)
-sellInput.PlaceholderText = "ชื่อสัตว์ที่จะขาย (เช่น Golden Octopus)"
-sellInput.Text = _G.Config.AutoSellName or ""
-sellInput.BackgroundColor3 = theme.Button
-sellInput.TextColor3 = theme.Text
-Instance.new("UICorner", sellInput)
-
-sellInput.FocusLost:Connect(function()
-    _G.Config.AutoSellName = sellInput.Text
-end)
+sellInput.Size = UDim2.new(1, 0, 0, 35); sellInput.PlaceholderText = "ชื่อสัตว์ที่จะขาย..."; sellInput.Text = _G.Config.AutoSellName or ""; sellInput.BackgroundColor3 = theme.Button; sellInput.TextColor3 = theme.Text; Instance.new("UICorner", sellInput)
+sellInput.FocusLost:Connect(function() _G.Config.AutoSellName = sellInput.Text end)
 
 makeToggle("Auto Sell (Turbo)", hatchTab, "AutoSell", function(v)
     local sellRemote = RS:WaitForChild("Remotes"):WaitForChild("Events"):WaitForChild("SellMonsterEvent")
@@ -281,18 +240,13 @@ makeToggle("Auto Sell (Turbo)", hatchTab, "AutoSell", function(v)
         if targetName and targetName ~= "" then
             for _, obj in pairs(player:GetDescendants()) do
                 if string.find(obj.Name, targetName) then
-                    task.spawn(function()
-                        pcall(function()
-                            sellRemote:FireServer(obj.Name)
-                        end)
-                    end)
+                    task.spawn(function() pcall(function() sellRemote:FireServer(obj.Name) end) end)
                 end
             end
         end
         task.wait(0.3)
     end
 end)
-
 
 ------------------------------------------------
 -- 3. SACRIFICE TAB
@@ -309,7 +263,7 @@ makeToggle("Auto Sacrifice", sacTab, "Sac", function(v)
 end)
 
 ------------------------------------------------
--- 4. CAMERA TAB (SAVE/WARP/LOCK)
+-- 4. CAMERA TAB
 ------------------------------------------------
 local sPos, sCam
 local function camBtn(text, parent, callback)
@@ -330,7 +284,7 @@ makeToggle("Lock Camera View", camTab, "CamLock", function(v)
 end)
 
 ------------------------------------------------
--- 5. SETTINGS (SAVE/LOAD/REJOIN)
+-- 5. SETTINGS
 ------------------------------------------------
 local bSave = Instance.new("TextButton", setTab)
 bSave.Size = UDim2.new(1,0,0,45); bSave.Text = "SAVE EVERYTHING (JSON)"; bSave.BackgroundColor3 = theme.Accent; bSave.TextColor3 = theme.Text
