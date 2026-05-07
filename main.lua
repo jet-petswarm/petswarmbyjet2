@@ -1,11 +1,13 @@
--- [[ CONFIGURATION - แก้ไขตรงนี้ ]]
-local allowedNames = {"Tippawan_811", "ชื่อของคุณ2"} -- ใส่ชื่อผู้เล่นที่อนุญาต
+-- [[ CONFIGURATION ]]
+local allowedNames = {"Tippawan_811", "ชื่อของคุณ2"} 
 local targetPlaceId = 93712201161812
-local fileName = "FarmSettings.json" -- ชื่อไฟล์ที่ใช้บันทึกค่า
+local fileName = "FarmSettings.json"
+local targetCFrame = CFrame.new(-18.0, 5.2, -161.8) -- พิกัดเป้าหมาย
 
 -- [[ SERVICES ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 -- [[ SECURITY CHECK ]]
@@ -17,91 +19,114 @@ local function isAllowed()
 end
 
 if not isAllowed() then 
-    warn("Access Denied: Player not in whitelist.")
+    warn("Access Denied!")
     return 
 end
 
-if game.PlaceId ~= targetPlaceId then
-    warn("Wrong Map! Current ID: " .. game.PlaceId)
-    return
-end
-
--- [[ DATA SAVING SYSTEM ]]
+-- [[ DATA SYSTEM ]]
 local farmActive = false
 local function saveSettings()
-    local data = {farming = farmActive}
-    writefile(fileName, HttpService:JSONEncode(data))
+    pcall(function()
+        writefile(fileName, HttpService:JSONEncode({farming = farmActive}))
+    end)
 end
 
 local function loadSettings()
     if isfile(fileName) then
-        local data = HttpService:JSONDecode(readfile(fileName))
-        return data.farming
+        local success, data = pcall(function() return HttpService:JSONDecode(readfile(fileName)) end)
+        return success and data.farming or false
     end
     return false
 end
 
--- [[ UI SETUP ]]
+-- [[ UI SETUP - แสดงทุกแมพ ]]
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 150, 0, 110)
+MainFrame.Size = UDim2.new(0, 160, 0, 120)
 MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.Active = true
-MainFrame.Draggable = true -- ทำให้ลาก UI ได้
+MainFrame.Draggable = true
 
 local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, 0, 0, 25)
-Title.Text = "Mini Farm UI"
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "JET FARMER"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 
 local StatusLabel = Instance.new("TextLabel", MainFrame)
 StatusLabel.Size = UDim2.new(1, 0, 0, 20)
-StatusLabel.Position = UDim2.new(0, 0, 0, 25)
-StatusLabel.Text = "Status: Idle"
-StatusLabel.TextColor3 = Color3.new(1, 1, 0)
+StatusLabel.Position = UDim2.new(0, 0, 0, 30)
+StatusLabel.Text = "Status: Checking..."
+StatusLabel.TextColor3 = Color3.new(1, 1, 1)
 StatusLabel.BackgroundTransparency = 1
 
 local ActionBtn = Instance.new("TextButton", MainFrame)
-ActionBtn.Size = UDim2.new(0.8, 0, 0, 40)
-ActionBtn.Position = UDim2.new(0.1, 0, 0, 55)
-ActionBtn.Text = "START FARM"
-ActionBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+ActionBtn.Size = UDim2.new(0.9, 0, 0, 40)
+ActionBtn.Position = UDim2.new(0.05, 0, 0, 60)
+ActionBtn.Text = "START"
+ActionBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 ActionBtn.TextColor3 = Color3.new(1, 1, 1)
 
--- [[ FUNCTIONALITY ]]
+-- [[ LOGIC ]]
 local function teleport()
-    local character = player.Character or player.CharacterAdded:Wait()
-    local rootPart = character:WaitForChild("HumanoidRootPart", 10)
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     if rootPart then
-        task.wait(0.5)
-        rootPart.CFrame = CFrame.new(-18.0, 5.2, -161.8)
+        rootPart.CFrame = targetCFrame
     end
 end
 
--- ลูปการฟาร์ม
+-- ลูปเช็คตำแหน่ง (Check Position)
 task.spawn(function()
-    while true do
-        if farmActive then
-            StatusLabel.Text = "Status: FARMING..."
-            StatusLabel.TextColor3 = Color3.new(0, 1, 0)
-            
-            -- โค้ด Remote ที่คุณให้มา
-            local net = game:GetService("ReplicatedStorage"):WaitForChild("NetworkingContainer"):WaitForChild("DataRemote")
-            net:FireServer({ {{"\226\129\130G", "707a396b-b43b-4622-9ad1-dd8620b72f00"}} })
-            net:FireServer({ {{"\226\129\130("}} })
-            net:FireServer({ {{"\226\129\130G", "c6887ad6-0381-4b16-a6ff-328d30250795"}} })
-        else
-            StatusLabel.Text = "Status: STOPPED"
-            StatusLabel.TextColor3 = Color3.new(1, 0, 0)
+    while task.wait(1) do
+        if farmActive and game.PlaceId == targetPlaceId then
+            local character = player.Character
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                -- ถ้าอยู่ห่างจากเป้าหมายเกิน 5 Units ให้วาร์ปกลับ
+                if (rootPart.Position - targetCFrame.Position).Magnitude > 5 then
+                    teleport()
+                end
+            end
         end
-        task.wait(0.5)
     end
 end)
 
--- ปุ่มกดสลับ สถานะ
+-- ลูปฟาร์มแบบรัวๆ (Rapid Fire)
+task.spawn(function()
+    while true do
+        if farmActive and game.PlaceId == targetPlaceId then
+            StatusLabel.Text = "Status: RUNNING ⚡"
+            StatusLabel.TextColor3 = Color3.new(0, 1, 0)
+            
+            local net = game:GetService("ReplicatedStorage"):WaitForChild("NetworkingContainer"):WaitForChild("DataRemote")
+            -- ส่งข้อมูลรัวๆ
+            net:FireServer({ {{"\226\129\130G", "707a396b-b43b-4622-9ad1-dd8620b72f00"}} })
+            net:FireServer({ {{"\226\129\130("}} })
+            net:FireServer({ {{"\226\129\130G", "c6887ad6-0381-4b16-a6ff-328d30250795"}} })
+            
+            task.wait(0.1) -- ปรับให้รัวขึ้น (0.1 วินาที)
+        elseif game.PlaceId ~= targetPlaceId then
+            StatusLabel.Text = "Status: WRONG MAP"
+            StatusLabel.TextColor3 = Color3.new(1, 0.5, 0)
+            farmActive = false
+            task.wait(1)
+        else
+            StatusLabel.Text = "Status: STOPPED"
+            StatusLabel.TextColor3 = Color3.new(1, 0, 0)
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- ปุ่มกด
 ActionBtn.MouseButton1Click:Connect(function()
+    if game.PlaceId ~= targetPlaceId then 
+        warn("Cannot start: Not in Pet Swarm map.")
+        return 
+    end
+    
     farmActive = not farmActive
     if farmActive then
         ActionBtn.Text = "STOP FARM"
@@ -111,13 +136,16 @@ ActionBtn.MouseButton1Click:Connect(function()
         ActionBtn.Text = "START FARM"
         ActionBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
     end
-    saveSettings() -- บันทึกค่าลงเครื่อง
+    saveSettings()
 end)
 
--- [[ INITIAL RUN (Auto-run if saved) ]]
+-- [[ INIT ]]
 farmActive = loadSettings()
-if farmActive then
+if farmActive and game.PlaceId == targetPlaceId then
     ActionBtn.Text = "STOP FARM"
     ActionBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-    task.spawn(teleport) -- วาร์ปทันทีถ้าเคยเปิดฟาร์มไว้
+    task.spawn(teleport)
+else
+    ActionBtn.Text = "START FARM"
+    ActionBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
 end
