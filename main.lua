@@ -245,7 +245,7 @@ local success, initError = pcall(function()
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if humanoid and humanoid.SeatPart then
             local seat = humanoid.SeatPart
-            if seat.ведении then end
+            if seat.Occupant then end
             -- หา Model หลักของเรือ
             local model = seat:FindFirstAncestorOfClass("Model")
             if model and model.PrimaryPart then
