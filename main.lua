@@ -1,8 +1,8 @@
 -- ==================================================
--- JET HUB: ALLIANCE TOWER DEFENDERS V1 (INSTANT HIT)
+-- JET HUB: ALLIANCE TOWER DEFENDERS V1 (AUTO LOCK POS)
 -- ==================================================
 print("==========================================")
-print("[JET HUB] เริ่มต้นรันสคริปต์ (โหมดฮิตทันที ไม่มีดีเลย์)...")
+print("[JET HUB] เริ่มต้นรันสคริปต์ (พร้อมระบบล็อคตำแหน่งและดึงกลับออโต้)...")
 
 local success, initError = pcall(function()
     local Players = game:GetService("Players")
@@ -11,6 +11,7 @@ local success, initError = pcall(function()
     local TweenService = game:GetService("TweenService")
     local VirtualUser = game:GetService("VirtualUser")
     local CoreGui = game:GetService("CoreGui")
+    local RunService = game:GetService("RunService")
 
     local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
@@ -29,8 +30,9 @@ local success, initError = pcall(function()
 
     local autoFishing = false
     local castPosition = nil
+    local lockedCharacterCFrame = nil -- ตัวแปรเก็บตำแหน่งล็อคตัวละคร/เรือ
     local selectingCastPosition = false
-    local luckHoldTime = 0.3 -- ลดเวลาโฮลด์โชคให้ไวขึ้น
+    local luckHoldTime = 0.3
 
     -- สร้าง ScreenGui หลัก
     local screenGui = Instance.new("ScreenGui")
@@ -49,11 +51,11 @@ local success, initError = pcall(function()
         screenGui.Parent = playerGui
     end
 
-    -- หน้าต่างหลัก (ปรับขนาดให้กระชับลงเพราะตัดปุ่มดีเลย์ออก)
+    -- หน้าต่างหลัก (ขยายขนาดความสูงเพิ่มนิดหน่อยเพื่อให้พอดีกับปุ่มสถานะพิกัดใหม่)
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.fromOffset(280, 340)
-    mainFrame.Position = UDim2.new(0.5, -140, 0.5, -170)
+    mainFrame.Size = UDim2.fromOffset(280, 380)
+    mainFrame.Position = UDim2.new(0.5, -140, 0.5, -190)
     mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -117,7 +119,7 @@ local success, initError = pcall(function()
     container.Position = UDim2.new(0, 0, 0, 40)
     container.BackgroundTransparency = 1
     container.BorderSizePixel = 0
-    container.CanvasSize = UDim2.new(0, 0, 0, 300)
+    container.CanvasSize = UDim2.new(0, 0, 0, 340)
     container.ScrollBarThickness = 2
     container.Parent = mainFrame
 
@@ -183,15 +185,20 @@ local success, initError = pcall(function()
 
     local castButton = createButton("CastButton", "SET CAST LOCATION", Color3.fromRGB(45, 85, 160))
     
-    local locationLabel = Instance.new("TextLabel")
-    locationLabel.Size = UDim2.fromOffset(256, 16)
-    locationLabel.BackgroundTransparency = 1
-    locationLabel.Text = "Cast Pos: Not Set"
-    locationLabel.TextColor3 = Color3.fromRGB(170, 170, 190)
-    locationLabel.TextSize = 10
-    locationLabel.Font = Enum.Font.Gotham
-    locationLabel.TextXAlignment = Enum.TextXAlignment.Left
-    locationLabel.Parent = container
+    -- ปุ่มบอกสถานะพิกัด (กดแล้วโชว์พิกัด + เปลี่ยนสีตามสถานะ: ฟ้า=เห็นตำแหน่ง, เขียว=กำลังเปิดออโต้ล็อค)
+    local locationStatusButton = Instance.new("TextButton")
+    locationStatusButton.Name = "LocationStatusButton"
+    locationStatusButton.Size = UDim2.fromOffset(256, 30)
+    locationStatusButton.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+    locationStatusButton.Text = "Location Status: Not Set"
+    locationStatusButton.TextColor3 = Color3.fromRGB(170, 170, 190)
+    locationStatusButton.TextSize = 11
+    locationStatusButton.Font = Enum.Font.GothamMedium
+    locationStatusButton.Parent = container
+
+    local locCorner = Instance.new("UICorner")
+    locCorner.CornerRadius = UDim.new(0, 8)
+    locCorner.Parent = locationStatusButton
 
     local fishButton = createButton("FishButton", "Auto Fish: OFF", Color3.fromRGB(180, 45, 45))
     local holdButton = createButton("HoldButton", "Luck Hold: 0.3s", Color3.fromRGB(45, 45, 55))
@@ -224,12 +231,34 @@ local success, initError = pcall(function()
     minButton.MouseButton1Click:Connect(function()
         minimized = not minimized
         minButton.Text = minimized and "+" or "-"
-        local targetSize = minimized and UDim2.fromOffset(280, 40) or UDim2.fromOffset(280, 340)
+        local targetSize = minimized and UDim2.fromOffset(280, 40) or UDim2.fromOffset(280, 380)
         TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = targetSize}):Play()
         container.Visible = not minimized
     end)
 
-    -- ฟังก์ชันกด Hit UI ทันทีแบบไม่หน่วง
+    -- ฟังก์ชันดึงตำแหน่ง RootPart (รองรับทั้งตัวละครธรรมดา และตัวละครที่ขับเรือ/นั่งยานพาหนะ)
+    local function getRootPart()
+        local character = player.Character
+        if not character then return nil end
+        
+        -- ถ้ากำลังนั่งขับเรือ (Seat / VehicleSeat) ให้พยายามดึงพาร์ทรวมของเรือ
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid and humanoid.SeatPart then
+            local seat = humanoid.SeatPart
+            if seat.ведении then end
+            -- หา Model หลักของเรือ
+            local model = seat:FindFirstAncestorOfClass("Model")
+            if model and model.PrimaryPart then
+                return model.PrimaryPart, model
+            else
+                return seat, seat
+            end
+        end
+        
+        return character:FindFirstChild("HumanoidRootPart"), character
+    end
+
+    -- ฟังก์ชันกด Hit UI ทันที
     local function clickTargetUI()
         pcall(function()
             local lobbyUI = playerGui:FindFirstChild("_LobbyUI")
@@ -260,7 +289,7 @@ local success, initError = pcall(function()
         end)
     end
 
-    -- ฟังก์ชันตกปลาแบบรวดเร็วทันที (Instant Hit)
+    -- ฟังก์ชันตกปลาแบบ Instant Hit
     local function fishOnce()
         if not autoFishing or not castPosition then return end
         
@@ -271,12 +300,10 @@ local success, initError = pcall(function()
         end
         if not FishingEvent then return end
         
-        -- โยนเบ็ด
         pcall(function() FishingEvent:FireServer("Cast", { Position = castPosition }) end)
         task.wait(0.02)
         if not autoFishing then return end
         
-        -- ลัคโฮลด์
         pcall(function() FishingEvent:FireServer("LuckHold", { ClickTime = os.clock() }) end)
         task.wait(luckHoldTime)
         if not autoFishing then return end
@@ -285,7 +312,6 @@ local success, initError = pcall(function()
         task.wait(0.02)
         if not autoFishing then return end
         
-        -- ฮิตทันทีรัวๆ แบบไม่ดีเลย์
         pcall(function()
             for index = 1, 17 do
                 if not autoFishing then break end
@@ -306,7 +332,18 @@ local success, initError = pcall(function()
             local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
             if result then
                 castPosition = result.Position
-                locationLabel.Text = string.format("Pos: %.1f, %.1f, %.1f", castPosition.X, castPosition.Y, castPosition.Z)
+                
+                -- บันทึกตำแหน่งตัวละคร/เรือปัจจุบันเก็บไว้เป็นจุดล็อค
+                local rootPart, model = getRootPart()
+                if rootPart then
+                    lockedCharacterCFrame = rootPart.CFrame
+                end
+
+                -- อัปเดตปุ่มสถานะ Location ให้เป็นสีฟ้า (เห็นตำแหน่งแล้ว)
+                locationStatusButton.Text = string.format("Pos: X:%.0f Y:%.0f Z:%.0f", castPosition.X, castPosition.Y, castPosition.Z)
+                locationStatusButton.TextColor3 = Color3.fromRGB(100, 210, 255)
+                locationStatusButton.BackgroundColor3 = Color3.fromRGB(35, 70, 110)
+
                 castButton.Text = "CHANGE CAST LOCATION"
                 castButton.BackgroundColor3 = Color3.fromRGB(45, 140, 85)
                 selectingCastPosition = false
@@ -322,6 +359,15 @@ local success, initError = pcall(function()
         castButton.BackgroundColor3 = Color3.fromRGB(200, 140, 30)
         statusLabel.Text = "Status: Select a location..."
         statusLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+    end)
+
+    -- ปุ่มคลิกที่แถบสถานะพิกัดเพื่อดูพิกัดชัดๆ อีกรอบได้
+    locationStatusButton.MouseButton1Click:Connect(function()
+        if castPosition then
+            locationStatusButton.Text = string.format("Pos: X:%.1f, Y:%.1f, Z:%.1f", castPosition.X, castPosition.Y, castPosition.Z)
+        else
+            locationStatusButton.Text = "Location Status: Not Set Yet!"
+        end
     end)
 
     UserInputService.TouchTap:Connect(function(touchPositions, processedByUI)
@@ -345,15 +391,36 @@ local success, initError = pcall(function()
             statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
             return
         end
+        
         autoFishing = not autoFishing
         if autoFishing then
+            -- อัปเดตตำแหน่งล็อคล่าสุดก่อนกดเริ่ม
+            local rootPart = getRootPart()
+            if rootPart then
+                lockedCharacterCFrame = rootPart.CFrame
+            end
+
             fishButton.Text = "Auto Fish: ON"
             TweenService:Create(fishButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 180, 80)}):Play()
+            
+            -- เปลี่ยนสถานะพิกัดเป็น "สีเขียว" เมื่อเปิดทำงาน
+            locationStatusButton.BackgroundColor3 = Color3.fromRGB(30, 110, 60)
+            locationStatusButton.TextColor3 = Color3.fromRGB(120, 255, 150)
+            locationStatusButton.Text = "Locked Pos & Boat Active"
+
             statusLabel.Text = "Auto Fish: Working (Active)"
             statusLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
         else
             fishButton.Text = "Auto Fish: OFF"
             TweenService:Create(fishButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(180, 45, 45)}):Play()
+            
+            -- เปลี่ยนสถานะพิกัดกลับเป็นสีฟ้าเมื่อปิด
+            locationStatusButton.BackgroundColor3 = Color3.fromRGB(35, 70, 110)
+            locationStatusButton.TextColor3 = Color3.fromRGB(100, 210, 255)
+            if castPosition then
+                locationStatusButton.Text = string.format("Pos: X:%.0f Y:%.0f Z:%.0f", castPosition.X, castPosition.Y, castPosition.Z)
+            end
+
             statusLabel.Text = "Auto Fish: OFF (Paused)"
             statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
         end
@@ -366,12 +433,38 @@ local success, initError = pcall(function()
         holdButton.Text = "Luck Hold: " .. luckHoldTime .. "s"
     end)
 
-    -- รันลูปตกปลาแบบต่อเนื่องไร้รอยต่อ
+    -- ระบบเช็คและดึงตัวละครหรือเรือกลับมาที่เดิมตลอดเวลาเมื่อเปิด Auto Fish
+    RunService.Heartbeat:Connect(function()
+        if autoFishing and lockedCharacterCFrame then
+            pcall(function()
+                local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.SeatPart then
+                    -- ถ้านั่งเรืออยู่ ให้ดึงตัวเรือทั้งโมเดลกลับมาที่เดิม
+                    local seat = humanoid.SeatPart
+                    local model = seat:FindFirstAncestorOfClass("Model")
+                    if model and model.PrimaryPart then
+                        model:SetPrimaryPartCFrame(lockedCharacterCFrame)
+                    else
+                        seat.CFrame = lockedCharacterCFrame
+                    end
+                else
+                    -- ถ้าไม่ได้ขับเรือ ให้ดึงตัวละครหลักกลับมาที่เดิม
+                    local rootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if rootPart then
+                        rootPart.CFrame = lockedCharacterCFrame
+                        rootPart.Velocity = Vector3.new(0, 0, 0) -- ล้างแรงเหวี่ยงป้องกันการกระเด็น
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- รันลูปตกปลาแบบต่อเนื่อง
     task.spawn(function()
         while true do
             if autoFishing then
                 fishOnce()
-                task.wait(0.05) -- วนลูปซ้ำทันทีแบบรวดเร็ว
+                task.wait(0.05)
             else
                 task.wait(0.1)
             end
@@ -390,7 +483,7 @@ local success, initError = pcall(function()
         end
     end)
 
-    print("[JET HUB] โหลดสำเร็จ: โหมด Instant Hit พร้อมทำงาน!")
+    print("[JET HUB] โหลดสำเร็จ: พร้อมระบบล็อคตำแหน่งและดึงเรือออโต้!")
     print("==========================================")
 end)
 
