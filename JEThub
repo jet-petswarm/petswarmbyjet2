@@ -1,0 +1,49 @@
+-- ==================================================
+-- JET HUB: SECURE LOADER & WHITELIST SYSTEM
+-- ==================================================
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+
+-- รายชื่อผู้เล่นที่ได้รับอนุญาตให้รันสคริปต์นี้เท่านั้น
+local allowedUsers = {
+    ["ripgodinder"] = true,
+    -- สามารถเพิ่มชื่อคนอื่นได้ตรงนี้ เช่น ["ชื่อในเกม"] = true,
+}
+
+-- ตรวจสอบสิทธิ์ Username
+if not allowedUsers[localPlayer.Name] then
+    localPlayer:Kick("\n[JET HUB SECURITY]\nคุณไม่ได้รับอนุญาตให้ใช้งานสคริปต์นี้!")
+    return
+end
+
+print("==========================================")
+print("[JET HUB] ยืนยันตัวตนสำเร็จ: " .. localPlayer.Name)
+print("[JET HUB] กำลังดึงข้อมูลสคริปต์จากเซิร์ฟเวอร์หลัก...")
+
+-- ลิงก์ GitHub เป้าหมายของคุณ
+local scriptUrl = "https://raw.githubusercontent.com/jet-petswarm/petswarmbyjet2/refs/heads/main/main.lua"
+
+-- ทำการดึงและรันสคริปต์แบบปลอดภัย
+local success, response = pcall(function()
+    return game:HttpGet(scriptUrl)
+end)
+
+if success and response then
+    local runSuccess, runError = pcall(function()
+        local compiledScript = loadstring(response)
+        if compiledScript then
+            compiledScript()
+        else
+            error("ไม่สามารถคอมไพล์โค้ดจากลิงก์ได้")
+        end
+    end)
+
+    if runSuccess then
+        print("[JET HUB] โหลดและรันสคริปต์ภายในสำเร็จ 100%!")
+        print("==========================================")
+    else
+        warn("[JET HUB Error]: เกิดข้อผิดพลาดขณะรันสคริปต์ -> " .. tostring(runError))
+    end
+else
+    warn("[JET HUB Error]: ไม่สามารถเชื่อมต่อเพื่อดึงสคริปต์จาก GitHub ได้")
+end
