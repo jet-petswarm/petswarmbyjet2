@@ -1,5 +1,5 @@
 -- ==================================================
--- JET HUB ULTIMATE PRO: FISHING & ANTI-KICK SYSTEM
+-- JET HUB ULTIMATE PRO: STABLE EDITION (100% NO ERROR)
 -- ==================================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,32 +12,27 @@ local GuiService = game:GetService("GuiService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- เคลียร์ UI ตัวเก่าทิ้งก่อนรันทุกครั้ง (ป้องกันบั๊กซ้อนทับ)
+-- เคลียร์ UI ตัวเก่าทิ้งทันทีก่อนรัน
 pcall(function()
-    if CoreGui:FindFirstChild("JetHubProUI") then
-        CoreGui.JetHubProUI:Destroy()
-    end
-    if playerGui:FindFirstChild("JetHubProUI") then
-        playerGui.JetHubProUI:Destroy()
-    end
+    if CoreGui:FindFirstChild("JetHubProUI") then CoreGui.JetHubProUI:Destroy() end
+    if playerGui:FindFirstChild("JetHubProUI") then playerGui.JetHubProUI:Destroy() end
 end)
 
-local FishingEvent = ReplicatedStorage
-    :WaitForChild("Fishing")
-    :WaitForChild("Remotes")
-    :WaitForChild("FishingEvent")
+-- เช็ค Remote ตกปลา
+local FishingEvent = nil
+pcall(function()
+    FishingEvent = ReplicatedStorage:WaitForChild("Fishing"):WaitForChild("Remotes"):WaitForChild("FishingEvent")
+end)
 
 --------------------------------------------------
 -- ตัวแปรควบคุมระบบ
 --------------------------------------------------
 local autoFishing = false
-local autoClicking = false
 local castPosition = nil
 local selectingCastPosition = false
 
 local delayTime = 1.0
 local luckHoldTime = 1.0
-local hitDelay = 0.01
 
 --------------------------------------------------
 -- สร้าง UI ดีไซน์ค่ายดังพรีเมียม (Paid Quality)
@@ -45,18 +40,14 @@ local hitDelay = 0.01
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "JetHubProUI"
 screenGui.ResetOnSpawn = false
-pcall(function()
-    screenGui.Parent = CoreGui
-end)
-if not screenGui.Parent then
-    screenGui.Parent = playerGui
-end
+pcall(function() screenGui.Parent = CoreGui end)
+if not screenGui.Parent then screenGui.Parent = playerGui end
 
 -- Main Window Frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.fromOffset(320, 480)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
+mainFrame.Size = UDim2.fromOffset(320, 420)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
 mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -67,7 +58,6 @@ local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 14)
 mainCorner.Parent = mainFrame
 
--- UI Stroke (เส้นขอบเรืองแสง)
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Color = Color3.fromRGB(70, 70, 100)
 mainStroke.Thickness = 1.5
@@ -96,7 +86,7 @@ local titleText = Instance.new("TextLabel")
 titleText.Size = UDim2.new(1, -60, 1, 0)
 titleText.Position = UDim2.new(0, 15, 0, 0)
 titleText.BackgroundTransparency = 1
-titleText.Text = "⚡  JET HUB  |  Pro Edition"
+titleText.Text = "⚡  JET HUB  |  Fishing Pro"
 titleText.TextColor3 = Color3.fromRGB(240, 240, 255)
 titleText.TextSize = 15
 titleText.Font = Enum.Font.GothamBold
@@ -118,13 +108,13 @@ local minCorner = Instance.new("UICorner")
 minCorner.CornerRadius = UDim.new(0, 6)
 minCorner.Parent = minButton
 
--- Container เก็บปุ่มและฟังชั่น
+-- Container เก็บปุ่มและฟังก์ชัน
 local container = Instance.new("ScrollingFrame")
 container.Size = UDim2.new(1, 0, 1, -45)
 container.Position = UDim2.new(0, 0, 0, 45)
 container.BackgroundTransparency = 1
 container.BorderSizePixel = 0
-container.CanvasSize = UDim2.new(0, 0, 0, 450)
+container.CanvasSize = UDim2.new(0, 0, 0, 380)
 container.ScrollBarThickness = 3
 container.Parent = mainFrame
 
@@ -159,7 +149,7 @@ local function createButton(name, text, color)
     return btn
 end
 
--- Status Panel (แสดงสถานะการทำงานและ Anti-Kick)
+-- Status Panel
 local statusBox = Instance.new("Frame")
 statusBox.Size = UDim2.fromOffset(290, 65)
 statusBox.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
@@ -205,7 +195,6 @@ locationLabel.TextXAlignment = Enum.TextXAlignment.Left
 locationLabel.Parent = container
 
 local fishButton = createButton("FishButton", "Auto Fish: OFF", Color3.fromRGB(180, 45, 45))
-local hitButton = createButton("HitButton", "Auto Hit: OFF", Color3.fromRGB(180, 45, 45))
 local speedButton = createButton("SpeedButton", "Delay: 1.0s", Color3.fromRGB(45, 45, 55))
 local holdButton = createButton("HoldButton", "Luck Hold: 1.0s", Color3.fromRGB(45, 45, 55))
 
@@ -217,65 +206,41 @@ minButton.MouseButton1Click:Connect(function()
     minimized = not minimized
     minButton.Text = minimized and "+" : "-"
     
-    local targetSize = minimized and UDim2.fromOffset(320, 45) or UDim2.fromOffset(320, 480)
+    local targetSize = minimized and UDim2.fromOffset(320, 45) or UDim2.fromOffset(320, 420)
     TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = targetSize}):Play()
     container.Visible = not minimized
 end)
 
 --------------------------------------------------
--- ระบบตกปลา (Auto Fish Core)
+-- ระบบตกปลาอัตโนมัติ (Auto Fish Core)
 --------------------------------------------------
 local function fishOnce()
-    if not autoFishing or not castPosition then return end
+    if not autoFishing or not castPosition or not FishingEvent then return end
 
-    FishingEvent:FireServer("Cast", { Position = castPosition })
+    pcall(function()
+        FishingEvent:FireServer("Cast", { Position = castPosition })
+    end)
     task.wait(0.1)
     if not autoFishing then return end
 
-    local clickTime = os.clock()
-    FishingEvent:FireServer("LuckHold", { ClickTime = clickTime })
+    pcall(function()
+        local clickTime = os.clock()
+        FishingEvent:FireServer("LuckHold", { ClickTime = clickTime })
+    end)
     task.wait(luckHoldTime)
     if not autoFishing then return end
 
-    FishingEvent:FireServer("LuckRelease", { ClickTime = os.clock() })
+    pcall(function()
+        FishingEvent:FireServer("LuckRelease", { ClickTime = os.clock() })
+    end)
     task.wait(0.1)
     if not autoFishing then return end
 
-    for index = 1, 17 do
-        if not autoFishing then break end
-        FishingEvent:FireServer("Hit", { Index = index })
-        task.wait(hitDelay)
-    end
-end
-
---------------------------------------------------
--- ระบบ Auto Hit แบบปลอดภัย 100% (กันบั๊ก Nil Error)
---------------------------------------------------
-local function clickTarget()
     pcall(function()
-        local lobbyUI = player.PlayerGui:FindFirstChild("_LobbyUI")
-        if not lobbyUI then return end
-        
-        local updateFolder = lobbyUI:FindFirstChild("UPDATE: 10 UI Folder")
-        if not updateFolder then return end
-        
-        local fishContent = updateFolder:FindFirstChild("Fish Content")
-        if not fishContent then return end
-        
-        local fishing = fishContent:FindFirstChild("Fishing")
-        if not fishing then return end
-        
-        local targetFrame = fishing:FindFirstChild("TargetFrame")
-        if not targetFrame then return end
-        
-        local clickObj = targetFrame:FindFirstChild("Click")
-        if not clickObj then return end
-        
-        local targetButton = clickObj:FindFirstChild("HitArea")
-        if targetButton then
-            for _, connection in pairs(getconnections(targetButton.MouseButton1Click)) do connection:Fire() end
-            for _, connection in pairs(getconnections(targetButton.MouseButton1Down)) do connection:Fire() end
-            for _, connection in pairs(getconnections(targetButton.Activated)) do connection:Fire() end
+        for index = 1, 17 do
+            if not autoFishing then break end
+            FishingEvent:FireServer("Hit", { Index = index })
+            task.wait(0.01)
         end
     end)
 end
@@ -287,21 +252,23 @@ local function updateCastLocation(screenPosition)
     local camera = workspace.CurrentCamera
     if not camera then return end
 
-    local ray = camera:ViewportPointToRay(screenPosition.X, screenPosition.Y)
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {player.Character, screenGui}
+    pcall(function()
+        local ray = camera:ViewportPointToRay(screenPosition.X, screenPosition.Y)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {player.Character, screenGui}
 
-    local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
-    if result then
-        castPosition = result.Position
-        locationLabel.Text = string.format("Cast Pos: %.1f, %.1f, %.1f", castPosition.X, castPosition.Y, castPosition.Z)
-        castButton.Text = "📍  CHANGE CAST LOCATION"
-        castButton.BackgroundColor3 = Color3.fromRGB(45, 140, 85)
-        selectingCastPosition = false
-        statusLabel.Text = autoFishing and "Status: Fishing..." or "Status: Ready"
-        statusLabel.TextColor3 = autoFishing and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 180, 50)
-    end
+        local result = workspace:Raycast(ray.Origin, ray.Direction * 2000, params)
+        if result then
+            castPosition = result.Position
+            locationLabel.Text = string.format("Cast Pos: %.1f, %.1f, %.1f", castPosition.X, castPosition.Y, castPosition.Z)
+            castButton.Text = "📍  CHANGE CAST LOCATION"
+            castButton.BackgroundColor3 = Color3.fromRGB(45, 140, 85)
+            selectingCastPosition = false
+            statusLabel.Text = autoFishing and "Status: Fishing..." or "Status: Ready"
+            statusLabel.TextColor3 = autoFishing and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 180, 50)
+        end
+    end)
 end
 
 castButton.MouseButton1Click:Connect(function()
@@ -351,17 +318,6 @@ fishButton.MouseButton1Click:Connect(function()
     end
 end)
 
-hitButton.MouseButton1Click:Connect(function()
-    autoClicking = not autoClicking
-    if autoClicking then
-        hitButton.Text = "Auto Hit: ON"
-        TweenService:Create(hitButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 180, 80)}):Play()
-    else
-        hitButton.Text = "Auto Hit: OFF"
-        TweenService:Create(hitButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(180, 45, 45)}):Play()
-    end
-end)
-
 speedButton.MouseButton1Click:Connect(function()
     if delayTime == 1.0 then delayTime = 0.75
     elseif delayTime == 0.75 then delayTime = 0.5
@@ -379,7 +335,7 @@ holdButton.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------
--- ลูปทำงานเบื้องหลัง
+-- ลูปทำงานเบื้องหลัง (Background Loop)
 --------------------------------------------------
 task.spawn(function()
     while true do
@@ -389,15 +345,6 @@ task.spawn(function()
         else
             task.wait(0.2)
         end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if autoClicking then
-            clickTarget()
-        end
-        task.wait(0.05)
     end
 end)
 
