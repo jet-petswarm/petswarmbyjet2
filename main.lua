@@ -1,8 +1,8 @@
 -- =====================================================================
--- JET HUB: ALLIANCE TOWER DEFENDERS V2 (FISH + FULL MACRO AUTO PLAY)
+-- JET HUB: ALLIANCE TOWER DEFENDERS V2 (FISH + FULL MACRO + AUTO SAVE)
 -- =====================================================================
 print("==========================================")
-print("[JET HUB] เริ่มต้นรันสคริปต์รวม (Fish + Macro Automation)...")
+print("[JET HUB] เริ่มต้นรันสคริปต์รวม พร้อมระบบจำค่า (Auto Save)...")
 
 local success, initError = pcall(function()
     local Players = game:GetService("Players")
@@ -13,7 +13,7 @@ local success, initError = pcall(function()
     local CoreGui = game:GetService("CoreGui")
     local RunService = game:GetService("RunService")
     local Workspace = game:GetService("Workspace")
-    local TeleportService = game:GetService("TeleportService")
+    local HttpService = game:GetService("HttpService")
 
     local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
@@ -24,20 +24,49 @@ local success, initError = pcall(function()
         if playerGui:FindFirstChild("JetHubAllianceV2") then playerGui.JetHubAllianceV2:Destroy() end
     end)
 
+    -- =====================================================================
+    -- 💾 ระบบบันทึกและโหลดสถานะ (Auto Save / Load State)
+    -- =====================================================================
+    local saveFileName = "JetHub_MacroSettings.json"
+
+    local function saveSettings(state)
+        pcall(function()
+            if writefile then
+                local data = { MacroEnabled = state }
+                writefile(saveFileName, HttpService:JSONEncode(data))
+            end
+        end)
+    end
+
+    local function loadSettings()
+        local success, result = pcall(function()
+            if readfile and isfile and isfile(saveFileName) then
+                local content = readfile(saveFileName)
+                local data = HttpService:JSONDecode(content)
+                return data.MacroEnabled
+            end
+        end)
+        if success and result ~= nil then
+            return result
+        end
+        return false -- ค่าเริ่มต้นถ้ายังไม่เคยเปิด
+    end
+
+    -- โหลดสถานะ Macro ที่เคยบันทึกไว้ทันที
+    local autoMacroEnabled = loadSettings()
+
     -- ตรวจสอบ Remote ตกปลา
     local FishingEvent = nil
     pcall(function()
         FishingEvent = ReplicatedStorage:WaitForChild("Fishing", 2):WaitForChild("Remotes", 2):WaitForChild("FishingEvent", 2)
     end)
 
-    -- ตัวแปรสถานะหลัก
+    -- ตัวแปรสถานะหลักอื่นๆ
     local autoFishing = false
     local castPosition = nil
     local lockedCharacterCFrame = nil 
     local selectingCastPosition = false
     local luckHoldTime = 0.3
-
-    local autoMacroEnabled = false -- สถานะเปิด/ปิดระบบมาโครฟาร์ม
 
     -- สร้าง ScreenGui หลัก
     local screenGui = Instance.new("ScreenGui")
@@ -56,7 +85,7 @@ local success, initError = pcall(function()
         screenGui.Parent = playerGui
     end
 
-    -- หน้าต่างหลัก (Main Frame) ขยายความสูงเพิ่มรองรับปุ่ม Macro
+    -- หน้าต่างหลัก (Main Frame)
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
     mainFrame.Size = UDim2.fromOffset(280, 440)
@@ -181,8 +210,8 @@ local success, initError = pcall(function()
     antiKickStatus.Size = UDim2.new(1, -16, 0, 20)
     antiKickStatus.Position = UDim2.new(0, 8, 0, 28)
     antiKickStatus.BackgroundTransparency = 1
-    antiKickStatus.Text = "Macro Farm: OFF"
-    antiKickStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+    antiKickStatus.Text = autoMacroEnabled and "Macro Farm: Active" or "Macro Farm: OFF"
+    antiKickStatus.TextColor3 = autoMacroEnabled and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 100, 100)
     antiKickStatus.TextSize = 11
     antiKickStatus.Font = Enum.Font.GothamMedium
     antiKickStatus.TextXAlignment = Enum.TextXAlignment.Left
@@ -208,8 +237,8 @@ local success, initError = pcall(function()
     local fishButton = createButton("FishButton", "Auto Fish: OFF", Color3.fromRGB(180, 45, 45))
     local holdButton = createButton("HoldButton", "Luck Hold: 0.3s", Color3.fromRGB(45, 45, 55))
 
-    -- ปุ่มเปิด/ปิด ระบบ Macro Farm อัตโนมัติ
-    local macroButton = createButton("MacroButton", "Macro Farm: OFF", Color3.fromRGB(180, 45, 45))
+    -- ปุ่มเปิด/ปิด ระบบ Macro Farm อัตโนมัติ (ปรับสีตามค่าที่โหลดมา)
+    local macroButton = createButton("MacroButton", autoMacroEnabled and "Macro Farm: ON" or "Macro Farm: OFF", autoMacroEnabled and Color3.fromRGB(45, 180, 80) or Color3.fromRGB(180, 45, 45))
 
     -- ปุ่มลอยเปิด-ปิด UI
     local toggleGuiButton = Instance.new("TextButton")
@@ -430,9 +459,13 @@ local success, initError = pcall(function()
         holdButton.Text = "Luck Hold: " .. luckHoldTime .. "s"
     end)
 
-    -- ปุ่มกดเปิด/ปิดระบบ Macro Farm
+    -- ปุ่มกดเปิด/ปิดระบบ Macro Farm (พร้อมสั่งเซฟสถานะลงไฟล์อัตโนมัติ)
     macroButton.MouseButton1Click:Connect(function()
         autoMacroEnabled = not autoMacroEnabled
+        
+        -- บันทึกค่าลงไฟล์ทันทีเมื่อกดเปลี่ยนสถานะ
+        saveSettings(autoMacroEnabled)
+
         if autoMacroEnabled then
             macroButton.Text = "Macro Farm: ON"
             TweenService:Create(macroButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 180, 80)}):Play()
@@ -497,8 +530,6 @@ local success, initError = pcall(function()
     -- =====================================================================
     -- 🤖 ระบบ MACRO AUTOMATION (Lobby Matchmaking & In-Game Placement)
     -- =====================================================================
-    
-    -- ฟังก์ชันช่วยจำลองการคลิกปุ่มผ่าน UI Path
     local function clickGuiObject(uiObject)
         if not uiObject then return false end
         if uiObject:IsA("TextButton") or uiObject:IsA("ImageButton") then
@@ -506,7 +537,6 @@ local success, initError = pcall(function()
                 for _, conn in pairs(getconnections(uiObject.MouseButton1Click)) do conn:Fire() end
                 for _, conn in pairs(getconnections(uiObject.Activated)) do conn:Fire() end
             end
-            -- เผื่อเกมใช้ระบบ Input หรือ MouseClick ทั่วไป
             pcall(function()
                 firesignal(uiObject.MouseButton1Click)
             end)
@@ -515,20 +545,18 @@ local success, initError = pcall(function()
         return false
     end
 
-    -- 1. ระบบจัดการหน้าล็อบบี้ (Matchmaking & Map Navigation)
+    -- 1. ระบบจัดการหน้าล็อบบี้
     task.spawn(function()
         while true do
             task.wait(1)
             if autoMacroEnabled then
                 pcall(function()
                     local currentPlaceId = game.PlaceId
-                    -- ถ้าอยู่ในแมพหลักล็อบบี้ (99703116573266)
                     if currentPlaceId == 99703116573266 then
                         print("[Macro] อยู่ในแมพหลัก - รอ 1 นาทีตามเงื่อนไข...")
-                        task.wait(60) -- รอ 1 นาที
+                        task.wait(60)
                         if not autoMacroEnabled then return end
 
-                        -- กดปุ่ม: Play (Path: _MainUI.DownSide.Select.Play.Use)
                         local p1 = playerGui:FindFirstChild("_MainUI")
                         if p1 then
                             local useBtn = p1:FindFirstChild("DownSide") and p1.DownSide:FindFirstChild("Select") and p1.DownSide.Select:FindFirstChild("Play") and p1.DownSide.Select.Play:FindFirstChild("Use")
@@ -536,7 +564,6 @@ local success, initError = pcall(function()
                         end
                         task.wait(3)
 
-                        -- กดปุ่ม: Classic (Path: MatchmakingUI.Frame.Selector.Classic.Move.Use)
                         local m1 = playerGui:FindFirstChild("MatchmakingUI")
                         if m1 then
                             local useBtn = m1:FindFirstChild("Frame") and m1.Frame:FindFirstChild("Selector") and m1.Frame.Selector:FindFirstChild("Classic") and m1.Frame.Selector.Classic:FindFirstChild("Move") and m1.Frame.Selector.Classic.Move:FindFirstChild("Use")
@@ -544,7 +571,6 @@ local success, initError = pcall(function()
                         end
                         task.wait(3)
 
-                        -- กดปุ่มเลือกแมพ Camera Lab
                         local m2 = playerGui:FindFirstChild("MatchmakingUI")
                         if m2 then
                             local mapUse = m2:FindFirstChild("MatchMaking") and m2.MatchMaking:FindFirstChild("CurrentFrame") and m2.MatchMaking.CurrentFrame:FindFirstChild("Found") and m2.MatchMaking.CurrentFrame.Found:FindFirstChild("MapsList") and m2.MatchMaking.CurrentFrame.Found.MapsList:FindFirstChild("Camera Lab") and m2.MatchMaking.CurrentFrame.Found.MapsList["Camera Lab"]:FindFirstChild("Move") and m2.MatchMaking.CurrentFrame.Found.MapsList["Camera Lab"].Move:FindFirstChild("Use")
@@ -552,7 +578,6 @@ local success, initError = pcall(function()
                         end
                         task.wait(3)
 
-                        -- กดย้ำๆ ที่ปุ่ม Found.Move.Use จนกว่าจะย้ายแมพ
                         while game.PlaceId == 99703116573266 and autoMacroEnabled do
                             pcall(function()
                                 local m3 = playerGui:FindFirstChild("MatchmakingUI")
@@ -565,7 +590,6 @@ local success, initError = pcall(function()
                         end
                     end
 
-                    -- ถ้าอยู่ในหน้าจบเกม (GameEndUI Replay)
                     local endUI = playerGui:FindFirstChild("GameEndUI")
                     if endUI then
                         local replayUse = endUI:FindFirstChild("NewFrame") and endUI.NewFrame:FindFirstChild("Selector") and endUI.NewFrame.Selector:FindFirstChild("Replay") and endUI.NewFrame.Selector.Replay:FindFirstChild("Use")
@@ -582,19 +606,16 @@ local success, initError = pcall(function()
         end
     end)
 
-    -- 2. ระบบ Macro วางยูนิตและอัปเกรดอัตโนมัติ (ทำงานเมื่อเข้าสู่ด่านเล่นจริง)
+    -- 2. ระบบ Macro วางยูนิตและอัปเกรดอัตโนมัติ
     task.spawn(function()
-        -- ตรวจสอบว่าไม่ได้อยู่ในแมพหลัก (แสดงว่าอยู่ในเกมเล่นจริง)
         while true do
             task.wait(1)
             if autoMacroEnabled and game.PlaceId ~= 99703116573266 then
-                -- รอให้โหลด Remotes ให้พร้อม
                 local remoteFuncs = ReplicatedStorage:WaitForChild("RemoteFunctions", 5)
                 if remoteFuncs then
                     local PlaceTower = remoteFuncs:WaitForChild("PlaceTower", 5)
                     local UpgradeTower = remoteFuncs:WaitForChild("UpgradeTower", 5)
 
-                    -- ระบบ Auto Speed 1.5x
                     task.spawn(function()
                         local speedRemote = ReplicatedStorage:FindFirstChild("RemoteEvents") 
                             and ReplicatedStorage.RemoteEvents:FindFirstChild("SetGameSpeed")
@@ -606,15 +627,12 @@ local success, initError = pcall(function()
                         end
                     end)
 
-                    -- ลำดับคิวมาโครที่คุณต้องการ
                     local macroQueue = {
-                        -- 🟢 Plunger Camera Man 4 ตัวแรก
                         { action = "Place", name = "Plunger Camera Man", reqCash = 250, cframe = CFrame.new(-25.3438377, -4.66457939, -0.644769669, 1, 0, 0, 0, 1, 0, 0, 0, 1) },
                         { action = "Place", name = "Plunger Camera Man", reqCash = 250, cframe = CFrame.new(-23.2532196, -4.66457939, 0.197704315, -0.0905106068, 0, -0.995895445, 0, 1, 0, 0.995895445, 0, -0.0905106068) },
                         { action = "Place", name = "Plunger Camera Man", reqCash = 250, cframe = CFrame.new(-25.036665, -4.66457939, 1.02075291, 1, 0, 0, 0, 1, 0, 0, 0, 1) },
                         { action = "Place", name = "Plunger Camera Man", reqCash = 250, cframe = CFrame.new(-23.1003609, -4.66457939, -2.01315594, 1, 0, 0, 0, 1, 0, 0, 0, 1) },
 
-                        -- 🔵 อัปเกรด Plunger ตัวที่ 1-4 ให้ตัน
                         { action = "Upgrade", towerIndex = 1, reqCash = 450 },
                         { action = "Upgrade", towerIndex = 1, reqCash = 650 },
                         { action = "Upgrade", towerIndex = 1, reqCash = 900 },
@@ -631,7 +649,6 @@ local success, initError = pcall(function()
                         { action = "Upgrade", towerIndex = 4, reqCash = 650 },
                         { action = "Upgrade", towerIndex = 4, reqCash = 900 },
 
-                        -- 🟣 วาง Titan TV Man ทีละตัว แล้วอัปเกรดให้ตันทันที
                         { action = "Place", name = "Titan TV Man", reqCash = 2000, cframe = CFrame.new(-23.0490818, -2.43174171, -7.89207458, -0.330505848, 0, 0.943803906, 0, 1, 0, -0.943803906, 0, -0.330505848) },
                         { action = "Upgrade", towerIndex = 5, reqCash = 1400 },
                         { action = "Upgrade", towerIndex = 5, reqCash = 1900 },
@@ -707,13 +724,13 @@ local success, initError = pcall(function()
                         task.wait(0.3)
                     end
                     print("🎉 [Macro] จบคิวการวางยูนิตในตานี้แล้ว!")
-                    break -- ทำงานจบตานี้แล้วรอจนกว่าจะรีจอยหรือเล่นใหม่
+                    break
                 end
             end
         end
     end)
 
-    print("[JET HUB V2] โหลดสำเร็จ: เมนูหลักรวมระบบตกปลาและ Macro Automation เรียบร้อย!")
+    print("[JET HUB V2] โหลดสำเร็จ: เพิ่มระบบจำสถานะ (Auto Save Settings) เรียบร้อย!")
     print("==========================================")
 end)
 
